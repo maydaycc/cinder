@@ -910,30 +910,19 @@ class RBDDriver(driver.CloneableImageVD, driver.MigrateVD,
 
                 cipher_spec = image_utils.decode_cipher(encryption['cipher'],
                                                         encryption['key_size'])
-
+                cluster_name, ceph_conf, ceph_user = self._get_config_tuple()
+                ceph_pool = self.configuration.rbd_pool
                 create_cmd = (
                     'qemu-img', 'create', '-f', 'luks',
                     '-o', 'cipher-alg=%(cipher_alg)s,'
                     'cipher-mode=%(cipher_mode)s,'
                     'ivgen-alg=%(ivgen_alg)s' % cipher_spec,
                     '--object', 'secret,id=luks_sec,'
-                    'format=raw,file=%(passfile)s' % {'passfile':
-                                                      tmp_key.name},
+                    'format=raw,file=%(passfile)s' % {'passfile':tmp_key.name},
                     '-o', 'key-secret=luks_sec',
-                    tmp_image.name,
+                    'rbd:%s/%s:id=%s:conf=%s'%(ceph_pool,volume.name,ceph_user,ceph_conf),
                     '%sM' % (volume.size * 1024))
                 self._execute(*create_cmd)
-
-            # Copy image into RBD
-            chunk_size = self.configuration.rbd_store_chunk_size * units.Mi
-            order = int(math.log(chunk_size, 2))
-
-            cmd = ['rbd', 'import',
-                   '--pool', self.configuration.rbd_pool,
-                   '--order', order,
-                   tmp_image.name, volume.name]
-            cmd.extend(self._ceph_args())
-            self._execute(*cmd)
 
     def create_volume(self, volume):
         """Creates a logical volume."""
